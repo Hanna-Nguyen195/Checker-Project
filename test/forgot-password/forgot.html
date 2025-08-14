@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Forgot Password Test</title>
+</head>
+<body>
+    <h2>Forgot Password</h2>
+    <input id="email" placeholder="Email" />
+    <button onclick="forgotPassword()">Send Request</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function forgotPassword() {
+            const email = document.getElementById('email').value;
+            const res = await fetch('http://127.0.0.1:8000/api/v1/auth/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        }
+    </script>
+</body>
+</html>
