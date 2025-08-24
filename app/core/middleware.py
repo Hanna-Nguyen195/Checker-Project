@@ -76,7 +76,9 @@ def setup_cors_middleware(app):
 def setup_trusted_host_middleware(app):
     """Setup trusted host middleware."""
     if not settings.debug:
+        # Filter out None values from allowed_hosts
+        allowed_hosts = [host for host in settings.allowed_hosts if host is not None]
         app.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=["localhost", "127.0.0.1"]
+            allowed_hosts=allowed_hosts
         )
