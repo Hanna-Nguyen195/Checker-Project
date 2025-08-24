@@ -55,15 +55,21 @@ app = FastAPI(
 
 
 # Setup trusted host middleware directly
-logger.info("Railway environment check", railway_env=bool(os.getenv("RAILWAY_ENVIRONMENT_NAME")), allow_all_hosts=settings.allow_all_hosts)
+railway_vars = {
+    "RAILWAY_ENVIRONMENT_NAME": os.getenv("RAILWAY_ENVIRONMENT_NAME"),
+    "RAILWAY_ENVIRONMENT": os.getenv("RAILWAY_ENVIRONMENT"),
+    "RAILWAY_PROJECT_ID": os.getenv("RAILWAY_PROJECT_ID"),
+    "PORT": os.getenv("PORT")
+}
+logger.info("Railway environment check", railway_vars=railway_vars, allow_all_hosts=settings.allow_all_hosts)
 
 if settings.allow_all_hosts:
-    logger.info("Skipping TrustedHostMiddleware for Railway deployment")
+    logger.info("✅ SKIPPING TrustedHostMiddleware - Railway deployment detected")
     # Don't add TrustedHostMiddleware on Railway - let all hosts through
 else:
     # Filter out None values for local development
     allowed_hosts = [host for host in settings.allowed_hosts if host is not None]
-    logger.info("Setting up TrustedHostMiddleware", allowed_hosts=allowed_hosts)
+    logger.info("⚠️ Adding TrustedHostMiddleware for local development", allowed_hosts=allowed_hosts)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 # Setup middleware
