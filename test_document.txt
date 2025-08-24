@@ -1,0 +1,3 @@
+This is a test document for plagiarism detection.
+It contains some sample text to test the upload and download functionality.
+The system should be able to store and retrieve this document successfully.
