@@ -3,7 +3,6 @@ import uuid
 from typing import Callable
 from fastapi import Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import structlog
 
@@ -73,14 +72,3 @@ def setup_cors_middleware(app):
     )
 
 
-def setup_trusted_host_middleware(app):
-    """Setup trusted host middleware."""
-    if settings.allow_all_hosts:
-        logger.info("Skipping TrustedHostMiddleware for Railway deployment")
-        # Don't add TrustedHostMiddleware on Railway - let all hosts through
-        return
-    else:
-        # Filter out None values for local development
-        allowed_hosts = [host for host in settings.allowed_hosts if host is not None]
-        logger.info("Setting up TrustedHostMiddleware", allowed_hosts=allowed_hosts)
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
