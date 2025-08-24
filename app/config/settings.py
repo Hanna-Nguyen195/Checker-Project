@@ -81,6 +81,6 @@ class Settings(BaseSettings):
     allow_all_hosts: bool = bool(os.getenv("RAILWAY_ENVIRONMENT_NAME"))
 
 
-@lru_cache()
+# @lru_cache()
 def get_settings() -> Settings:
     return Settings()
