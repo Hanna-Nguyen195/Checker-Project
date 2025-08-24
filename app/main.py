@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import structlog
+import os
 
 from app.config.settings import get_settings
 from app.config.database import create_tables
@@ -32,7 +33,8 @@ async def lifespan(app: FastAPI):
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error("Failed to create database tables", error=str(e))
-        raise
+        # Allow app to start without database for testing
+        logger.warning("Application starting without database connection")
     
     yield
     
@@ -53,9 +55,10 @@ app = FastAPI(
 
 
 # Setup trusted host middleware directly
+logger.info("Railway environment check", railway_env=bool(os.getenv("RAILWAY_ENVIRONMENT_NAME")), allow_all_hosts=settings.allow_all_hosts)
+
 if settings.allow_all_hosts:
     logger.info("Skipping TrustedHostMiddleware for Railway deployment")
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
     # Don't add TrustedHostMiddleware on Railway - let all hosts through
 else:
     # Filter out None values for local development

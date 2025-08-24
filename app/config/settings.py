@@ -72,9 +72,11 @@ class Settings(BaseSettings):
     
     # Railway deployment configuration
     allowed_hosts: list[str] = [
-        os.getenv("RAILWAY_PUBLIC_DOMAIN"), 
-        "localhost", 
-        "127.0.0.1"
+        host for host in [
+            os.getenv("RAILWAY_PUBLIC_DOMAIN"), 
+            "localhost", 
+            "127.0.0.1"
+        ] if host is not None
     ]
     
     # Add a flag to allow all hosts if running on a trusted platform
