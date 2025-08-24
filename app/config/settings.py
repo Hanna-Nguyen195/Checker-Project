@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
     
     # Database Configuration
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/plagiarism_detector"
+    database_url: str
     database_host: str = "localhost"
     database_port: int = 5432
     database_name: str = "plagiarism_detector"
