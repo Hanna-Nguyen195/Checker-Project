@@ -72,13 +72,13 @@ class Settings(BaseSettings):
     
     # Railway deployment configuration
     allowed_hosts: list[str] = [
-        host for host in [
-            os.getenv("RAILWAY_PUBLIC_DOMAIN"), 
-            "localhost", 
-            "127.0.0.1", 
-            "100.64.0.2"  # Add this private IP as a fallback
-        ] if host is not None
+        os.getenv("RAILWAY_PUBLIC_DOMAIN"), 
+        "localhost", 
+        "127.0.0.1"
     ]
+    
+    # Add a flag to allow all hosts if running on a trusted platform
+    allow_all_hosts: bool = bool(os.getenv("RAILWAY_ENVIRONMENT_NAME"))
 
 
 @lru_cache()

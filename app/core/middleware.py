@@ -75,9 +75,11 @@ def setup_cors_middleware(app):
 
 def setup_trusted_host_middleware(app):
     """Setup trusted host middleware."""
-    logger.info("Setting up TrustedHostMiddleware", allowed_hosts=settings.allowed_hosts)
-    
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=settings.allowed_hosts
-    )
+    if settings.allow_all_hosts:
+        logger.info("Setting up TrustedHostMiddleware with wildcard for Railway")
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+    else:
+        # Filter out None values for local development
+        allowed_hosts = [host for host in settings.allowed_hosts if host is not None]
+        logger.info("Setting up TrustedHostMiddleware", allowed_hosts=allowed_hosts)
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
