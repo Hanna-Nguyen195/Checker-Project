@@ -6,7 +6,8 @@ import structlog
 
 from app.config.settings import get_settings
 from app.config.database import create_tables
-from app.core.middleware import LoggingMiddleware, setup_cors_middleware, setup_trusted_host_middleware
+from app.core.middleware import LoggingMiddleware, setup_cors_middleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.core.exceptions import BaseCustomException
 from app.utils.logger import configure_logging
 from app.schemas.common import HealthCheck, ErrorResponse
@@ -51,7 +52,17 @@ app = FastAPI(
 
 # Setup middleware
 setup_cors_middleware(app)
-setup_trusted_host_middleware(app)
+
+# Setup trusted host middleware directly
+if settings.allow_all_hosts:
+    logger.info("Skipping TrustedHostMiddleware for Railway deployment")
+    # Don't add TrustedHostMiddleware on Railway - let all hosts through
+else:
+    # Filter out None values for local development
+    allowed_hosts = [host for host in settings.allowed_hosts if host is not None]
+    logger.info("Setting up TrustedHostMiddleware", allowed_hosts=allowed_hosts)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
 app.add_middleware(LoggingMiddleware)
 
 
@@ -131,6 +142,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=int(os.getenv("PORT", 8000)),
         reload=settings.debug
     )
