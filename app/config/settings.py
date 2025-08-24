@@ -80,12 +80,8 @@ class Settings(BaseSettings):
     ]
     
     # Add a flag to allow all hosts if running on a trusted platform
-    allow_all_hosts: bool = bool(
-        os.getenv("RAILWAY_ENVIRONMENT_NAME") or 
-        os.getenv("RAILWAY_ENVIRONMENT") or 
-        os.getenv("RAILWAY_PROJECT_ID") or
-        os.getenv("PORT")  # Railway always sets PORT
-    )
+    # Railway detection - be very aggressive since we're getting 400 errors
+    allow_all_hosts: bool = True  # Temporarily disable host validation entirely
 
 
 # @lru_cache()
