@@ -71,7 +71,14 @@ class Settings(BaseSettings):
         return [file_type.strip() for file_type in self.allowed_file_types.split(',')]
     
     # Railway deployment configuration
-    allowed_hosts: list[str] = [os.getenv("RAILWAY_PUBLIC_DOMAIN"), "localhost", "127.0.0.1"]
+    allowed_hosts: list[str] = [
+        host for host in [
+            os.getenv("RAILWAY_PUBLIC_DOMAIN"), 
+            "localhost", 
+            "127.0.0.1", 
+            "100.64.0.2"  # Add this private IP as a fallback
+        ] if host is not None
+    ]
 
 
 @lru_cache()
