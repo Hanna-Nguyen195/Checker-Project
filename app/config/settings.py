@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 from functools import lru_cache
+import os
 
 
 class Settings(BaseSettings):
@@ -68,6 +69,9 @@ class Settings(BaseSettings):
     def get_allowed_file_types(self) -> List[str]:
         """Parse allowed file types from comma-separated string."""
         return [file_type.strip() for file_type in self.allowed_file_types.split(',')]
+    
+    # Railway deployment configuration
+    allowed_hosts: list[str] = [os.getenv("RAILWAY_PUBLIC_DOMAIN"), "localhost", "127.0.0.1"]
 
 
 @lru_cache()
