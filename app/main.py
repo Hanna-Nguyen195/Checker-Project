@@ -50,12 +50,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Setup middleware
-setup_cors_middleware(app)
+
 
 # Setup trusted host middleware directly
 if settings.allow_all_hosts:
     logger.info("Skipping TrustedHostMiddleware for Railway deployment")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
     # Don't add TrustedHostMiddleware on Railway - let all hosts through
 else:
     # Filter out None values for local development
@@ -63,6 +63,8 @@ else:
     logger.info("Setting up TrustedHostMiddleware", allowed_hosts=allowed_hosts)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
+# Setup middleware
+setup_cors_middleware(app)
 app.add_middleware(LoggingMiddleware)
 
 
