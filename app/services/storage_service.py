@@ -121,7 +121,8 @@ class StorageService:
         client = None
         try:
             client = Minio(
-                endpoint=settings.minio_endpoint,
+                # settings.minio_endpoint,
+                "bucket-production-deb2d.up.railway.app",
                 access_key=settings.minio_access_key,
                 secret_key=settings.minio_secret_key,
                 secure=settings.minio_secure
