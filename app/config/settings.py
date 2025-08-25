@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 from functools import lru_cache
 import os
+from urllib.parse import urlparse
 
 
 class Settings(BaseSettings):
@@ -16,9 +17,24 @@ class Settings(BaseSettings):
     database_url: str 
     database_host: str = "localhost"
     database_port: int = 5433
-    database_name: str 
-    database_user: str 
-    database_password: str 
+    
+    @property
+    def database_name(self) -> str:
+        """Parse database name from database_url."""
+        parsed = urlparse(self.database_url)
+        return parsed.path.lstrip('/')
+    
+    @property
+    def database_user(self) -> str:
+        """Parse database user from database_url."""
+        parsed = urlparse(self.database_url)
+        return parsed.username or ""
+    
+    @property
+    def database_password(self) -> str:
+        """Parse database password from database_url."""
+        parsed = urlparse(self.database_url)
+        return parsed.password or "" 
     
     # JWT Configuration
     secret_key: str = "dev-secret-key-change-in-production"
