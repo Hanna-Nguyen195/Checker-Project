@@ -14,7 +14,7 @@ from app.utils.logger import configure_logging
 from app.schemas.common import HealthCheck, ErrorResponse
 
 # Import routers
-from app.controllers import auth, users, documents, plagiarism, admin
+from app.controllers import auth, plagiarism_upload, users, documents, plagiarism, admin, reference_documents
 
 settings = get_settings()
 logger = structlog.get_logger(__name__)
@@ -47,8 +47,8 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="A comprehensive plagiarism detection system with document management and analytics",
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    docs_url="/docs",  # Always enable Swagger docs
+    redoc_url="/redoc",  # Always enable ReDoc
     lifespan=lifespan
 )
 
@@ -144,7 +144,8 @@ async def root():
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(documents.router, prefix="/documents", tags=["Documents"])
-app.include_router(plagiarism.router, prefix="/plagiarism", tags=["Plagiarism"])
+app.include_router(plagiarism_upload.router, prefix="/plagiarism", tags=["Plagiarism"])
+app.include_router(reference_documents.router, prefix="/reference-documents", tags=["Reference Documents"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 
 

@@ -53,10 +53,11 @@ def validate_file_upload(file: UploadFile) -> None:
         )
     
     # Check file type
-    if file.content_type not in settings.allowed_file_types:
+    allowed_types = settings.get_allowed_file_types()
+    if file.content_type not in allowed_types:
         raise FileUploadException(
             f"File type {file.content_type} not allowed. "
-            f"Allowed types: {', '.join(settings.allowed_file_types)}"
+            f"Allowed types: {', '.join(allowed_types)}"
         )
 
 

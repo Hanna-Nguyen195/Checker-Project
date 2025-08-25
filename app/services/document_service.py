@@ -30,7 +30,7 @@ class DocumentService:
     ) -> UserDocument:
         """Upload a user document."""
         try:
-            # Upload file to storage
+            # Upload file to storage first
             object_id = self.storage_service.upload_file(
                 file_data=file_data,
                 original_filename=filename,
@@ -38,7 +38,7 @@ class DocumentService:
                 file_size=file_size
             )
             
-            # Create database record
+            # Create database record only after successful storage upload
             document = UserDocument(
                 user_id=user_id,
                 title=title or filename,
@@ -61,7 +61,13 @@ class DocumentService:
             return document
             
         except Exception as e:
-            logger.error("Failed to upload user document", error=str(e))
+            # Ensure database session is clean on any failure
+            try:
+                self.db.rollback()
+            except Exception as rollback_error:
+                logger.warning("Failed to rollback database session", error=str(rollback_error))
+            
+            logger.error("Failed to upload user document", error=str(e), exc_info=True)
             raise
     
     def get_user_document(self, document_id: int, user_id: Optional[int] = None) -> Optional[UserDocument]:

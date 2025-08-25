@@ -55,6 +55,189 @@ class PlagiarismService:
         
         return check
     
+    def create_plagiarism_check(
+        self, 
+        user_id: int, 
+        document_id: int, 
+        check_status: str = "processing"
+    ) -> PlagiarismCheck:
+        """Create a new plagiarism check record."""
+        try:
+            # Verify document exists and belongs to user
+            document = self.db.query(UserDocument).filter(
+                UserDocument.id == document_id,
+                UserDocument.user_id == user_id
+            ).first()
+            
+            if not document:
+                raise NotFoundException("Document not found")
+            
+            # Create plagiarism check record
+            check = PlagiarismCheck(
+                user_id=user_id,
+                user_document_id=document_id,
+                total_similarity_score=0.0,
+                check_status=check_status,
+                reference_documents_count=0,
+                matches_found=0
+            )
+            
+            self.db.add(check)
+            self.db.commit()
+            self.db.refresh(check)
+            
+            logger.info(
+                "Plagiarism check created",
+                check_id=check.id,
+                document_id=document_id,
+                status=check_status
+            )
+            
+            return check
+            
+        except Exception as e:
+            logger.error("Failed to create plagiarism check", error=str(e))
+            self.db.rollback()
+            raise
+    
+    def get_plagiarism_check_by_id(self, check_id: int) -> Optional[PlagiarismCheck]:
+        """Get plagiarism check by ID."""
+        return self.db.query(PlagiarismCheck).filter(PlagiarismCheck.id == check_id).first()
+    
+    def update_plagiarism_result(
+        self, 
+        check_id: int, 
+        external_result: dict
+    ) -> PlagiarismCheck:
+        """Update plagiarism check with results from external API."""
+        try:
+            # Get existing check
+            check = self.get_plagiarism_check_by_id(check_id)
+            if not check:
+                raise NotFoundException("Plagiarism check not found")
+            
+            # Extract data from external API result
+            data = external_result.get('data', {})
+            total_percent = data.get('total_percent', 0.0)
+            similarity_documents = data.get('similarity_documents', [])
+            
+            # Update check with results
+            check.total_similarity_score = total_percent
+            check.check_status = "completed"
+            check.matches_found = len(similarity_documents)
+            check.check_metadata = external_result  # Store full result as JSON
+            
+            # Validate that we have reference documents for all matches
+            self._validate_reference_documents(similarity_documents)
+            
+            # Save detailed matches
+            for doc_match in similarity_documents:
+                doc_name = doc_match.get('name', '')
+                similarity_value = doc_match.get('similarity_value', 0)
+                similarity_box_sentences = doc_match.get('similarity_box_sentences', [])
+                reference_document_id = doc_match.get('reference_document_id')
+                
+                # Validate reference_document_id exists in database
+                if not self._validate_reference_document_id(reference_document_id):
+                    raise NotFoundException(f"Reference document ID {reference_document_id} not found in database")
+                
+                # Create a plagiarism match record
+                match = PlagiarismMatch(
+                    check_id=check.id,
+                    reference_document_id=reference_document_id,
+                    similarity_score=similarity_value,
+                    matched_sentences_count=len([content for page in similarity_box_sentences for content in page.get('similarity_content', [])]),
+                    match_metadata={'document_name': doc_name}
+                )
+                self.db.add(match)
+                self.db.flush()  # Get the match ID
+                
+                # Save sentence matches
+                for page_data in similarity_box_sentences:
+                    page_number = page_data.get('pageNumber', 1)
+                    similarity_content = page_data.get('similarity_content', [])
+                    
+                    for content in similarity_content:
+                        sentence_text = content.get('content', '')
+                        rects = content.get('rects', [])
+                        
+                        # Create sentence match
+                        sent_match = SentenceMatch(
+                            match_id=match.id,
+                            user_sentence_text=sentence_text,
+                            user_sentence_start=0,  # Could be calculated from rects
+                            user_sentence_end=len(sentence_text),
+                            reference_sentence_text=sentence_text,  # Same as user for now
+                            reference_sentence_start=0,
+                            reference_sentence_end=len(sentence_text),
+                            similarity_score=similarity_value,
+                            match_type='detected',
+                            page_number=page_number,
+                            bounding_boxes=rects  # Store rects as JSON
+                        )
+                        self.db.add(sent_match)
+            
+            self.db.commit()
+            self.db.refresh(check)
+            
+            logger.info(
+                "Plagiarism result updated",
+                check_id=check.id,
+                similarity_score=check.total_similarity_score,
+                matches_found=check.matches_found
+            )
+            
+            return check
+            
+        except Exception as e:
+            logger.error("Failed to update plagiarism result", check_id=check_id, error=str(e))
+            self.db.rollback()
+            raise
+    
+    def _validate_reference_documents(self, similarity_documents: list) -> None:
+        """Validate that all referenced documents exist in the database."""
+        from app.models.document import ReferenceDocument
+        
+        missing_document_ids = []
+        
+        for doc_match in similarity_documents:
+            reference_document_id = doc_match.get('reference_document_id')
+            if not reference_document_id:
+                continue
+                
+            # Check if reference document exists by ID
+            ref_doc = self.db.query(ReferenceDocument).filter(
+                ReferenceDocument.id == reference_document_id
+            ).first()
+            
+            if not ref_doc:
+                missing_document_ids.append(str(reference_document_id))
+        
+        if missing_document_ids:
+            raise NotFoundException(
+                f"Reference document IDs not found in database: {', '.join(missing_document_ids)}. "
+                f"Please ensure these reference documents exist in the database."
+            )
+    
+    def _validate_reference_document_id(self, reference_document_id: int) -> bool:
+        """Validate that reference document ID exists in database."""
+        from app.models.document import ReferenceDocument
+        
+        if not reference_document_id:
+            return False
+            
+        ref_doc = self.db.query(ReferenceDocument).filter(
+            ReferenceDocument.id == reference_document_id
+        ).first()
+        
+        return ref_doc is not None
+    
+    def get_document_plagiarism_checks(self, document_id: int) -> list:
+        """Get all plagiarism checks for a document."""
+        return self.db.query(PlagiarismCheck).filter(
+            PlagiarismCheck.user_document_id == document_id
+        ).order_by(PlagiarismCheck.created_at.desc()).all()
+    
     def _process_plagiarism_check(self, check: PlagiarismCheck) -> None:
         """Process plagiarism check against reference documents."""
         start_time = time.time()

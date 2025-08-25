@@ -62,7 +62,9 @@ class SentenceMatch(Base, TimestampMixin):
     reference_sentence_start = Column(Integer, nullable=False)
     reference_sentence_end = Column(Integer, nullable=False)
     similarity_score = Column(Float, nullable=False)
-    match_type = Column(String(20), default="exact", nullable=False)  # 'exact' | 'paraphrase' | 'partial'
+    match_type = Column(String(20), default="exact", nullable=False)  # 'exact' | 'paraphrase' | 'partial' | 'detected'
+    page_number = Column(Integer, default=1)  # Page number where match was found
+    bounding_boxes = Column(JSON)  # Store bounding box coordinates as JSON
     
     # Relationships
     match = relationship("PlagiarismMatch", back_populates="sentence_matches")
