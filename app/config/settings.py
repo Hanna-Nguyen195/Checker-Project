@@ -125,6 +125,23 @@ class Settings(BaseSettings):
         """Parse allowed file types from comma-separated string."""
         return [file_type.strip() for file_type in self.allowed_file_types.split(',')]
     
+    # Email Configuration - Mailtrap
+    smtp_server: str = "live.smtp.mailtrap.io"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""  # Mailtrap API token
+    smtp_use_tls: bool = True
+    email_from: str = "noreply@plagiarism-detector.com"
+    email_from_name: str = "Plagiarism Detection System"
+    
+    # Mailtrap API Configuration
+    mailtrap_api_token: str = ""
+    mailtrap_sender_email: str = "noreply@plagiarism-detector.com"
+    
+    # Password Reset Configuration
+    reset_token_expire_hours: int = 24
+    frontend_url: str = "http://localhost:3000"  # Frontend URL for reset links
+    
     # Railway deployment configuration
     allowed_hosts: list[str] = [
         host for host in [

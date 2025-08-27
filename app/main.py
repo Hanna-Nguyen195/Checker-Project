@@ -14,7 +14,7 @@ from app.utils.logger import configure_logging
 from app.schemas.common import HealthCheck, ErrorResponse
 
 # Import routers
-from app.controllers import auth, plagiarism_upload, users, documents, plagiarism, admin, reference_documents
+from app.controllers import auth, plagiarism_upload, users, documents, admin, reference_documents
 
 settings = get_settings()
 logger = structlog.get_logger(__name__)

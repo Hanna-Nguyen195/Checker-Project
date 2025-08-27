@@ -2,12 +2,14 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 import structlog
+from datetime import datetime, timedelta
 
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 from app.core.security import get_password_hash, verify_password
 from app.core.exceptions import ConflictException, NotFoundException, AuthenticationException
 from app.utils.helpers import generate_reset_token
+from app.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
@@ -143,8 +145,10 @@ class UserService:
         
         # Generate reset token
         reset_token = generate_reset_token()
+        settings = get_settings()
+        
         user.reset_token = reset_token
-        user.reset_token_expiry = None  # Set expiry in production
+        user.reset_token_expiry = datetime.utcnow() + timedelta(hours=settings.reset_token_expire_hours)
         
         self.db.commit()
         
@@ -156,6 +160,14 @@ class UserService:
         user = self.db.query(User).filter(User.reset_token == token).first()
         if not user:
             raise NotFoundException("Invalid reset token")
+        
+        # Check if token has expired
+        if user.reset_token_expiry and user.reset_token_expiry < datetime.utcnow():
+            # Clear expired token
+            user.reset_token = None
+            user.reset_token_expiry = None
+            self.db.commit()
+            raise NotFoundException("Reset token has expired")
         
         # Update password and clear reset token
         user.password_hash = get_password_hash(new_password)

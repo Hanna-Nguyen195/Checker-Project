@@ -16,6 +16,7 @@ import structlog
 
 router = APIRouter()
 settings = get_settings()
+logger = structlog.get_logger(__name__)
 
 
 @router.post("/register", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
@@ -81,14 +82,28 @@ async def forgot_password(email: str, db: Session = Depends(get_db)):
     user_service = UserService(db)
     
     try:
+        from app.services.email_service import EmailService
+        
         reset_token = user_service.initiate_password_reset(email)
-        # In production, send email with reset token
-        return BaseResponse(
-            message="Password reset instructions sent to your email",
-            data={"reset_token": reset_token}  # Remove in production
-        )
+        
+        # Get user details for email
+        user = user_service.get_user_by_email(email)
+        user_name = user.full_name if user and user.full_name else ""
+        
+        # Send email
+        email_service = EmailService()
+        email_sent = await email_service.send_password_reset_email(email, reset_token, user_name)
+        
+        if email_sent:
+            logger.info("Password reset email sent successfully", email=email)
+            return BaseResponse(message="Password reset instructions sent to your email")
+        else:
+            logger.error("Failed to send password reset email", email=email)
+            return BaseResponse(message="Failed to send reset email. Please try again later.")
+            
     except Exception as e:
-        # Don't reveal if email exists or not
+        logger.error("Password reset error", email=email, error=str(e))
+        # Don't reveal if email exists or not for security
         return BaseResponse(message="If the email exists, reset instructions have been sent")
 
 

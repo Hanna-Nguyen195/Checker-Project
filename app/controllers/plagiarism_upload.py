@@ -13,7 +13,7 @@ from app.schemas.common import BaseResponse
 from app.schemas.plagiarism import PlagiarismCheckResponse, ExternalApiResult
 from app.utils.validators import validate_file_upload
 
-router = APIRouter( tags=["Plagiarism Upload"])
+router = APIRouter( tags=["Plagiarism"])
 logger = structlog.get_logger(__name__)
 
 # Configuration for external plagiarism API

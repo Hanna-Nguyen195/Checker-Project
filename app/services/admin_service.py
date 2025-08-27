@@ -76,7 +76,7 @@ class AdminService:
     
     def get_user_activity_stats(self, days: int = 30) -> List[Dict[str, Any]]:
         """Get user activity statistics over time."""
-        cutoff_date = datetime.utcnow().date() - datetime.timedelta(days=days)
+        cutoff_date = datetime.utcnow().date() - timedelta(days=days)
         
         # Daily user registrations
         daily_registrations = self.db.query(
@@ -227,7 +227,7 @@ class AdminService:
     
     def get_historical_stats(self, days: int = 30) -> List[SystemStats]:
         """Get historical system statistics."""
-        cutoff_date = datetime.utcnow().date() - datetime.timedelta(days=days)
+        cutoff_date = datetime.utcnow().date() - timedelta(days=days)
         
         return self.db.query(SystemStats).filter(
             SystemStats.date >= cutoff_date
