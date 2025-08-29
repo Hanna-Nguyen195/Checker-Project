@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # Test PostgreSQL Database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: plagiarism_postgres_test
+    environment:
+      POSTGRES_DB: plagiarism_detector_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5433:5432"
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d plagiarism_detector_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Test MinIO Object Storage
+  minio-test:
+    image: minio/minio:latest
+    container_name: plagiarism_minio_test
+    environment:
+      MINIO_ROOT_USER: testadmin
+      MINIO_ROOT_PASSWORD: testadmin123
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    networks:
+      - test_network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Test Redis (Optional)
+  redis-test:
+    image: redis:7-alpine
+    container_name: plagiarism_redis_test
+    ports:
+      - "6380:6379"
+    networks:
+      - test_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+networks:
+  test_network:
+    driver: bridge
