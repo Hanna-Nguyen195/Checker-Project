@@ -275,21 +275,29 @@ async def get_reference_documents(
     db: Session = Depends(get_db)
 ):
     """Get reference documents."""
-    document_service = DocumentService(db)
-    
-    documents = document_service.get_reference_documents(
-        skip=pagination.offset,
-        limit=pagination.size
-    )
-    total_count = document_service.get_reference_documents_count()
-    
-    document_responses = [ReferenceDocumentResponse.from_orm(doc) for doc in documents]
-    metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
-    
-    return PaginatedResponse(
-        data=document_responses,
-        pagination=metadata["pagination"]
-    )
+    try:
+        document_service = DocumentService(db)
+        
+        documents = document_service.get_reference_documents(
+            skip=pagination.offset,
+            limit=pagination.size
+        )
+        total_count = document_service.get_reference_documents_count()
+        
+        document_responses = [ReferenceDocumentResponse.from_orm(doc) for doc in documents]
+        metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
+        
+        return PaginatedResponse(
+            message="Reference documents retrieved successfully",
+            data=document_responses,
+            pagination=metadata.pagination
+        )
+    except Exception as e:
+        logger.error(f"Error getting reference documents: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while retrieving reference documents"
+        )
 
 
 @router.delete("/reference-documents/{document_id}", response_model=BaseResponse)
