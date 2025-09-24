@@ -20,9 +20,5 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
-# Copy and set permissions for startup script
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
 # Run migrations and start the application
-CMD ["/bin/bash", "/app/start.sh"]
+CMD bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port \$PORT"
