@@ -5,7 +5,7 @@ from datetime import datetime
 
 class BaseResponse(BaseModel):
     """Base response model."""
-    success: bool = True
+   
     message: Optional[str] = None
     data: Optional[Any] = None
 
@@ -25,11 +25,11 @@ class PaginatedResponse(BaseResponse):
     """Paginated response model."""
     data: List[Any]
     pagination: PaginationMeta
+    sync_results: Optional[Dict[str, Any]] = None
 
 
 class ErrorResponse(BaseModel):
     """Error response model."""
-    success: bool = False
     message: str
     error_code: Optional[str] = None
     details: Optional[Dict[str, Any]] = None

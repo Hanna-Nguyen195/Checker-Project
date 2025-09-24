@@ -14,7 +14,7 @@ from app.config.settings import get_settings
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models.user import User
-from app.models.document import ReferenceDocument, UserDocument
+from app.models.document import ReferenceDocument
 from app.models.plagiarism import PlagiarismCheck, PlagiarismMatch, SentenceMatch
 from app.models.plan import Plan, UserPlan, SystemStats
 

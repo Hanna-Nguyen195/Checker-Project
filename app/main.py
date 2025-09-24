@@ -145,7 +145,7 @@ app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(documents.router, prefix="/documents", tags=["Documents"])
 app.include_router(plagiarism_upload.router, prefix="/plagiarism", tags=["Plagiarism"])
-app.include_router(reference_documents.router, prefix="/reference-documents", tags=["Reference Documents"])
+app.include_router(reference_documents.router,prefix="/reference-documents", tags=["Reference Documents"])
 app.include_router(admin.router, prefix="/admin", tags=["Admin"])
 
 

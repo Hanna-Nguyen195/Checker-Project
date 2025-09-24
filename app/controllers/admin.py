@@ -10,7 +10,6 @@ from app.services.document_service import DocumentService
 from app.services.user_service import UserService
 from app.models.user import User
 from app.schemas.document import (
-    UserDocumentResponse, 
     ReferenceDocumentResponse, 
     DocumentApprovalRequest, 
     DocumentRejectionRequest
@@ -148,28 +147,7 @@ async def unban_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/documents/pending", response_model=PaginatedResponse)
-async def get_pending_documents(
-    pagination: PaginationParams = Depends(get_pagination_params),
-    current_admin: User = Depends(get_current_admin_dependency),
-    db: Session = Depends(get_db)
-):
-    """Get pending document approvals."""
-    document_service = DocumentService(db)
-    
-    documents = document_service.get_pending_documents(
-        skip=pagination.offset,
-        limit=pagination.size
-    )
-    total_count = document_service.get_pending_documents_count()
-    
-    document_responses = [UserDocumentResponse.from_orm(doc) for doc in documents]
-    metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
-    
-    return PaginatedResponse(
-        data=document_responses,
-        pagination=metadata["pagination"]
-    )
+# Legacy endpoint for pending documents has been removed
 
 
 @router.get("/documents/pending/summary", response_model=BaseResponse)
@@ -187,52 +165,10 @@ async def get_pending_documents_summary(
     )
 
 
-@router.post("/documents/{document_id}/approve", response_model=BaseResponse)
-async def approve_document(
-    document_id: int,
-    approval_data: DocumentApprovalRequest,
-    current_admin: User = Depends(get_current_admin_dependency),
-    db: Session = Depends(get_db)
-):
-    """Approve a user document for inclusion in reference database."""
-    document_service = DocumentService(db)
-    
-    try:
-        approved_doc = document_service.approve_user_document(
-            document_id=document_id,
-            admin_id=current_admin.id,
-            comment=approval_data.comment
-        )
-        return BaseResponse(
-            message="Document approved successfully",
-            data=UserDocumentResponse.from_orm(approved_doc)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+# Legacy endpoint for approving user documents has been removed
 
 
-@router.post("/documents/{document_id}/reject", response_model=BaseResponse)
-async def reject_document(
-    document_id: int,
-    rejection_data: DocumentRejectionRequest,
-    current_admin: User = Depends(get_current_admin_dependency),
-    db: Session = Depends(get_db)
-):
-    """Reject a user document."""
-    document_service = DocumentService(db)
-    
-    try:
-        rejected_doc = document_service.reject_user_document(
-            document_id=document_id,
-            admin_id=current_admin.id,
-            comment=rejection_data.comment
-        )
-        return BaseResponse(
-            message="Document rejected successfully",
-            data=UserDocumentResponse.from_orm(rejected_doc)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+# Legacy endpoint for rejecting user documents has been removed
 
 
 @router.post("/reference-documents", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)

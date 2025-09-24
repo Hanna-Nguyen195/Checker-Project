@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -11,7 +11,7 @@ from app.core.dependencies import get_current_user_dependency, get_pagination_pa
 from app.core.exceptions import NotFoundException, StorageException, ValidationException, FileUploadException
 from app.services.document_service import DocumentService
 from app.models.user import User
-from app.schemas.document import UserDocumentResponse, UserDocumentCreate
+from app.schemas.document import PlagiarismDocumentResponse
 from app.schemas.common import BaseResponse, PaginatedResponse
 from app.utils.validators import validate_file_upload
 from app.utils.helpers import create_response_metadata
@@ -39,7 +39,7 @@ async def upload_document(
         # Create document service
         document_service = DocumentService(db)
         
-        document = document_service.upload_user_document(
+        document = document_service.upload_plagiarism_document(
             user_id=current_user.id,
             file_data=file_stream,
             filename=file.filename,
@@ -50,7 +50,7 @@ async def upload_document(
         
         return BaseResponse(
             message="Document uploaded successfully",
-            data=UserDocumentResponse.from_orm(document)
+            data=PlagiarismDocumentResponse.from_orm(document)
         )
     except FileUploadException as e:
         logger.warning("File upload validation failed", error=str(e), filename=file.filename)
@@ -84,7 +84,7 @@ async def upload_document(
 
 @router.get("", response_model=PaginatedResponse)
 async def get_user_documents(
-    status_filter: Optional[str] = None,
+    sync_storage: bool = Query(False, description="Whether to synchronize with MinIO storage"),
     pagination: PaginationParams = Depends(get_pagination_params),
     current_user: User = Depends(get_current_user_dependency),
     db: Session = Depends(get_db)
@@ -92,24 +92,38 @@ async def get_user_documents(
     """Get user's documents with pagination."""
     document_service = DocumentService(db)
     
-    documents = document_service.get_user_documents(
+    # Optionally synchronize with storage
+    sync_results = None
+    if sync_storage:
+        try:
+            sync_results = document_service.synchronize_storage_with_database(document_type="all")
+            logger.info("Storage synchronization performed", 
+                       results=sync_results, user_id=current_user.id)
+        except Exception as e:
+            logger.error("Failed to synchronize storage", error=str(e))
+    
+    documents = document_service.get_plagiarism_documents(
         user_id=current_user.id,
-        status=status_filter,
         skip=pagination.offset,
         limit=pagination.size
     )
     
-    total_count = document_service.get_user_documents_count(
-        user_id=current_user.id,
-        status=status_filter
+    total_count = document_service.get_plagiarism_documents_count(
+        user_id=current_user.id
     )
     
-    document_responses = [UserDocumentResponse.from_orm(doc) for doc in documents]
+    # Convert documents to response models
+    document_responses = [PlagiarismDocumentResponse.from_orm(doc) for doc in documents]
+    
+    # Add sync results to metadata if available
     metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
+    if sync_results:
+        metadata["sync_results"] = sync_results
     
     return PaginatedResponse(
         data=document_responses,
-        pagination=metadata["pagination"]
+        pagination=metadata["pagination"],
+        sync_results=sync_results
     )
 
 
@@ -122,12 +136,12 @@ async def get_document(
     """Get document details."""
     document_service = DocumentService(db)
     
-    document = document_service.get_user_document(document_id, current_user.id)
+    document = document_service.get_plagiarism_document(document_id, current_user.id)
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     
     return BaseResponse(
-        data=UserDocumentResponse.from_orm(document)
+        data=PlagiarismDocumentResponse.from_orm(document)
     )
 
 
@@ -142,12 +156,12 @@ async def download_document(
     
     try:
         # Check if document exists first
-        document = document_service.get_user_document(document_id, current_user.id)
+        document = document_service.get_plagiarism_document(document_id, current_user.id)
         if not document:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
         
         # Download the file content
-        file_content = document_service.download_user_document(document_id, current_user.id)
+        file_content = document_service.download_plagiarism_document(document_id, current_user.id)
         
         # Properly encode filename for Content-Disposition header
         encoded_filename = quote(document.title.encode('utf-8'))
@@ -178,7 +192,7 @@ async def delete_document(
     document_service = DocumentService(db)
     
     try:
-        document_service.delete_user_document(document_id, current_user.id)
+        document_service.delete_plagiarism_document(document_id, current_user.id)
         return BaseResponse(message="Document deleted successfully")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

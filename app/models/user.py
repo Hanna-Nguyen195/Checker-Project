@@ -19,10 +19,15 @@ class User(Base, TimestampMixin):
     reset_token = Column(String(255))
     reset_token_expiry = Column(DateTime)
     
-    # Relationships
-    user_documents = relationship("UserDocument", back_populates="user", foreign_keys="UserDocument.user_id", cascade="all, delete-orphan")
+    # New relationships for three-database structure
+    plagiarism_documents = relationship("PlagiarismDocument", back_populates="user", cascade="all, delete-orphan")
+    pending_reference_documents = relationship("PendingReferenceDocument", back_populates="user", foreign_keys="PendingReferenceDocument.user_id", cascade="all, delete-orphan")
+    created_reference_documents = relationship("ReferenceDocument", back_populates="created_by_user")
+    approved_pending_documents = relationship("PendingReferenceDocument", foreign_keys="PendingReferenceDocument.approved_by", back_populates="approved_by_user")
+    
+    # Other relationships
     plagiarism_checks = relationship("PlagiarismCheck", back_populates="user")
     user_plans = relationship("UserPlan", back_populates="user", cascade="all, delete-orphan")
-    created_reference_documents = relationship("ReferenceDocument", back_populates="created_by_user")
-    approved_documents = relationship("UserDocument", foreign_keys="UserDocument.approved_by", back_populates="approved_by_user")
+    
+    # Legacy relationships have been removed
     

@@ -11,6 +11,7 @@ from app.services.document_service import DocumentService
 from app.services.plagiarism_service import PlagiarismService
 from app.schemas.common import BaseResponse
 from app.schemas.plagiarism import PlagiarismCheckResponse, ExternalApiResult
+from app.schemas.document import PlagiarismDocumentResponse
 from app.utils.validators import validate_file_upload
 
 router = APIRouter( tags=["Plagiarism"])
@@ -41,7 +42,7 @@ async def upload_and_check_plagiarism(
         
         # Step 1: Upload and save document to MinIO
         document_service = DocumentService(db)
-        document = document_service.upload_user_document(
+        document = document_service.upload_plagiarism_document(
             user_id=current_user.id,
             file_data=file.file,
             filename=file.filename,
@@ -50,12 +51,11 @@ async def upload_and_check_plagiarism(
             title=title
         )
         
-        # Step 2: Create plagiarism check record with processing status
+        # Step 2: Initiate plagiarism check using the external API
         plagiarism_service = PlagiarismService(db)
-        plagiarism_check = plagiarism_service.create_plagiarism_check(
-            user_id=current_user.id,
+        plagiarism_check = plagiarism_service.initiate_external_plagiarism_check(
             document_id=document.id,
-            check_status="processing"
+            user_id=current_user.id
         )
         
         logger.info(
@@ -160,13 +160,13 @@ async def get_user_history(
         document_service = DocumentService(db)
         plagiarism_service = PlagiarismService(db)
         
-        # Get user documents with their plagiarism checks
-        documents = document_service.get_user_documents(
+        # Get plagiarism documents with their plagiarism checks
+        documents = document_service.get_plagiarism_documents(
             user_id=current_user.id,
             skip=skip,
             limit=limit
         )
-        
+        logger.info("Documents retrieved", documents=documents)
         history = []
         for doc in documents:
             # Get plagiarism checks for this document
@@ -175,7 +175,7 @@ async def get_user_history(
             doc_data = {
                 "document_id": doc.id,
                 "title": doc.title,
-                "status": doc.status,
+                # "status": doc.status,
                 "uploaded_at": doc.created_at,
                 "plagiarism_checks": [
                     {
@@ -190,7 +190,7 @@ async def get_user_history(
             history.append(doc_data)
         
         # Get total count for pagination
-        total_count = document_service.get_user_documents_count(current_user.id)
+        total_count = document_service.get_plagiarism_documents_count(current_user.id)
         
         return BaseResponse(
             success=True,
@@ -211,4 +211,61 @@ async def get_user_history(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve user history"
+        )
+
+
+@router.post("/check-by-document-id/{document_id}", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
+async def check_plagiarism_by_document_id(
+    document_id: int,
+    current_user: User = Depends(get_current_user_dependency),
+    db: Session = Depends(get_db)
+):
+    """
+    Start a plagiarism check for an existing document using its ID.
+    Returns a plagiarism check record with processing status.
+    """
+    try:
+        
+        # Verify the document exists and belongs to the user
+        document_service = DocumentService(db)
+        document = document_service.get_plagiarism_document(document_id, current_user.id)
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found or you don't have access to it"
+            )
+        
+        # Initiate plagiarism check using the external API
+        plagiarism_service = PlagiarismService(db)
+        updated_check = plagiarism_service.initiate_external_plagiarism_check(
+            document_id=document.id,
+            user_id=current_user.id
+        )
+        
+        logger.info(
+            "Plagiarism check initiated for existing document",
+            document_id=document.id,
+            check_id=updated_check.id
+        )
+        
+        return BaseResponse(
+            success=True,
+            message="Plagiarism check initiated successfully.",
+            data={
+                "document_id": document.id,
+                "check_id": updated_check.id,
+                "title": document.title,
+                "status": updated_check.check_status,
+                "created_at": updated_check.created_at
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to initiate plagiarism check", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate plagiarism check: {str(e)}"
         )

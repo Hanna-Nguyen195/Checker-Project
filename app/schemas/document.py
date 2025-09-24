@@ -10,24 +10,21 @@ class DocumentStatus(str, Enum):
     REJECTED = "rejected"
 
 
-class UserDocumentBase(BaseModel):
+# PlagiarismDocument schemas
+class PlagiarismDocumentBase(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
 
 
-class UserDocumentCreate(UserDocumentBase):
+class PlagiarismDocumentCreate(PlagiarismDocumentBase):
     pass
 
 
-class UserDocumentResponse(UserDocumentBase):
+class PlagiarismDocumentResponse(PlagiarismDocumentBase):
     id: int
     user_id: int
     object_id: str
     content_type: Optional[str]
-    status: DocumentStatus
-    approved_by: Optional[int]
-    approved_at: Optional[datetime]
-    comment: Optional[str]
-    uploaded_at: datetime
+    document_metadata: Optional[Dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
@@ -35,9 +32,36 @@ class UserDocumentResponse(UserDocumentBase):
         from_attributes = True
 
 
+# PendingReferenceDocument schemas
+class PendingReferenceDocumentBase(BaseModel):
+    title: str = Field(..., max_length=255)
+
+
+class PendingReferenceDocumentCreate(PendingReferenceDocumentBase):
+    pass
+
+
+class PendingReferenceDocumentResponse(PendingReferenceDocumentBase):
+    id: int
+    user_id: int
+    object_id: str
+    content_type: Optional[str]
+    status: DocumentStatus
+    admin_comment: Optional[str]
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    document_metadata: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ReferenceDocument schemas
 class ReferenceDocumentBase(BaseModel):
     title: str = Field(..., max_length=255)
-    metadata: Optional[Dict[str, Any]] = None
+    document_metadata: Optional[Dict[str, Any]] = None
 
 
 class ReferenceDocumentCreate(ReferenceDocumentBase):
@@ -49,12 +73,15 @@ class ReferenceDocumentResponse(ReferenceDocumentBase):
     object_id: str
     content_type: Optional[str]
     created_by: Optional[int]
-    source_user_document_id: Optional[int]
+    source_pending_document_id: Optional[int]
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# Legacy schemas have been removed
 
 
 class DocumentApprovalRequest(BaseModel):

@@ -73,56 +73,55 @@ class StorageService:
     def _initialize_client(self):
         """Initialize MinIO client with connection validation."""
         # Log current MinIO configuration for debugging
-        # logger.info(
-        #     "MinIO configuration",
-        #     endpoint=settings.minio_endpoint,
-        #     access_key=settings.minio_access_key,
-        #     bucket=settings.minio_bucket_name,
-        #     secure=settings.minio_secure,
-        #     is_local=getattr(settings, 'is_local_environment', 'unknown')
-        # )
+        logger.info(
+            "MinIO configuration",
+            endpoint=settings.minio_endpoint,
+            access_key=settings.minio_access_key,
+            bucket=settings.minio_bucket_name,
+            secure=settings.minio_secure,
+            is_local=getattr(settings, 'is_local_environment', 'unknown')
+        )
         
-        # # Skip MinIO initialization if we detect it will fail
-        # if self._should_skip_minio():
-        #     self.is_connected = False
-        #     self.client = None
-        #     return
+        # Skip MinIO initialization if we detect it will fail
+        if self._should_skip_minio():
+            self.is_connected = False
+            self.client = None
+            return
             
-        # # Don't create client if we can't reach the endpoint
-        # import socket
-        # try:
-        #     host, port = settings.minio_endpoint.split(':')
-        #     port = int(port)
-        #     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #     sock.settimeout(2)  # 2 second timeout
-        #     result = sock.connect_ex((host, port))
-        #     sock.close()
+        # Don't create client if we can't reach the endpoint
+        import socket
+        try:
+            host, port = settings.minio_endpoint.split(':')
+            port = int(port)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)  # 2 second timeout
+            result = sock.connect_ex((host, port))
+            sock.close()
             
-        #     if result != 0:
-        #         logger.warning(
-        #             "MinIO endpoint not reachable, skipping client creation",
-        #             endpoint=settings.minio_endpoint
-        #         )
-        #         self.is_connected = False
-        #         self.client = None
-        #         return
+            if result != 0:
+                logger.warning(
+                    "MinIO endpoint not reachable, skipping client creation",
+                    endpoint=settings.minio_endpoint
+                )
+                self.is_connected = False
+                self.client = None
+                return
                 
-        # except Exception as e:
-        #     logger.warning(
-        #         "Failed to test MinIO endpoint connectivity",
-        #         endpoint=settings.minio_endpoint,
-        #         error=str(e)
-        #     )
-        #     self.is_connected = False
-        #     self.client = None
-        #     return
+        except Exception as e:
+            logger.warning(
+                "Failed to test MinIO endpoint connectivity",
+                endpoint=settings.minio_endpoint,
+                error=str(e)
+            )
+            self.is_connected = False
+            self.client = None
+            return
             
         # Only create client if endpoint is reachable
         client = None
         try:
             client = Minio(
-                # settings.minio_endpoint,
-                "bucket-production-deb2d.up.railway.app",
+                settings.minio_endpoint,
                 access_key=settings.minio_access_key,
                 secret_key=settings.minio_secret_key,
                 secure=settings.minio_secure

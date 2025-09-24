@@ -5,7 +5,8 @@ from datetime import datetime, date, timedelta
 import structlog
 
 from app.models.user import User
-from app.models.document import UserDocument, ReferenceDocument
+from app.models.document import ReferenceDocument
+from app.models.document import PlagiarismDocument
 from app.models.plagiarism import PlagiarismCheck
 from app.models.plan import SystemStats
 from app.core.exceptions import NotFoundException
@@ -27,10 +28,7 @@ class AdminService:
         admin_users = self.db.query(User).filter(User.role == "admin").count()
         
         # Document statistics
-        total_user_documents = self.db.query(UserDocument).count()
-        pending_documents = self.db.query(UserDocument).filter(UserDocument.status == "pending").count()
-        approved_documents = self.db.query(UserDocument).filter(UserDocument.status == "approved").count()
-        rejected_documents = self.db.query(UserDocument).filter(UserDocument.status == "rejected").count()
+        total_plagiarism_documents = self.db.query(PlagiarismDocument).count()
         total_reference_documents = self.db.query(ReferenceDocument).count()
         
         # Plagiarism check statistics
@@ -56,12 +54,7 @@ class AdminService:
                 "recent_registrations": recent_users
             },
             "documents": {
-                "user_documents": {
-                    "total": total_user_documents,
-                    "pending": pending_documents,
-                    "approved": approved_documents,
-                    "rejected": rejected_documents
-                },
+                "plagiarism_documents": total_plagiarism_documents,
                 "reference_documents": total_reference_documents
             },
             "plagiarism_checks": {
@@ -184,7 +177,7 @@ class AdminService:
         # Calculate statistics
         total_users = self.db.query(User).count()
         active_users = self.db.query(User).filter(User.status == "active").count()
-        total_user_documents = self.db.query(UserDocument).count()
+        total_plagiarism_documents = self.db.query(PlagiarismDocument).count()
         total_reference_documents = self.db.query(ReferenceDocument).count()
         total_checks = self.db.query(PlagiarismCheck).count()
         
@@ -196,7 +189,7 @@ class AdminService:
             # Update existing stats
             existing_stats.total_users = total_users
             existing_stats.active_users = active_users
-            existing_stats.total_user_documents = total_user_documents
+            existing_stats.total_user_documents = total_plagiarism_documents  # Field name kept for DB compatibility
             existing_stats.total_reference_documents = total_reference_documents
             existing_stats.total_checks = total_checks
             existing_stats.average_similarity = round(avg_similarity, 2)
@@ -212,7 +205,7 @@ class AdminService:
                 date=target_date,
                 total_users=total_users,
                 active_users=active_users,
-                total_user_documents=total_user_documents,
+                total_user_documents=total_plagiarism_documents,  # Field name kept for DB compatibility
                 total_reference_documents=total_reference_documents,
                 total_checks=total_checks,
                 average_similarity=round(avg_similarity, 2)
@@ -233,32 +226,4 @@ class AdminService:
             SystemStats.date >= cutoff_date
         ).order_by(SystemStats.date.desc()).all()
     
-    def get_pending_document_summary(self) -> Dict[str, Any]:
-        """Get summary of pending documents for admin review."""
-        pending_docs = self.db.query(UserDocument).filter(
-            UserDocument.status == "pending"
-        ).all()
-        
-        # Group by content type
-        by_content_type = {}
-        for doc in pending_docs:
-            content_type = doc.content_type or "unknown"
-            if content_type not in by_content_type:
-                by_content_type[content_type] = 0
-            by_content_type[content_type] += 1
-        
-        # Get oldest pending document
-        oldest_pending = self.db.query(UserDocument).filter(
-            UserDocument.status == "pending"
-        ).order_by(UserDocument.uploaded_at.asc()).first()
-        
-        return {
-            "total_pending": len(pending_docs),
-            "by_content_type": by_content_type,
-            "oldest_pending": {
-                "id": oldest_pending.id,
-                "title": oldest_pending.title,
-                "uploaded_at": oldest_pending.uploaded_at,
-                "user_id": oldest_pending.user_id
-            } if oldest_pending else None
-        }
+    # Legacy get_pending_document_summary method has been removed

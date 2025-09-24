@@ -4,7 +4,7 @@ import structlog
 import time
 
 from app.models.plagiarism import PlagiarismCheck, PlagiarismMatch, SentenceMatch
-from app.models.document import UserDocument, ReferenceDocument
+from app.models.document import ReferenceDocument, PlagiarismDocument, PendingReferenceDocument
 from app.services.storage_service import StorageService
 from app.core.exceptions import NotFoundException, PlagiarismCheckException
 from app.utils.helpers import calculate_similarity_percentage
@@ -20,11 +20,11 @@ class PlagiarismService:
         self.storage_service = StorageService()
     
     def start_plagiarism_check(self, user_id: int, document_id: int) -> PlagiarismCheck:
-        """Start plagiarism check for a user document."""
+        """Start plagiarism check for a document."""
         # Verify document exists and belongs to user
-        document = self.db.query(UserDocument).filter(
-            UserDocument.id == document_id,
-            UserDocument.user_id == user_id
+        document = self.db.query(PlagiarismDocument).filter(
+            PlagiarismDocument.id == document_id,
+            PlagiarismDocument.user_id == user_id
         ).first()
         
         if not document:
@@ -33,7 +33,7 @@ class PlagiarismService:
         # Create plagiarism check record
         check = PlagiarismCheck(
             user_id=user_id,
-            user_document_id=document_id,
+            plagiarism_document_id=document_id,
             total_similarity_score=0.0,
             check_status="processing"
         )
@@ -64,9 +64,9 @@ class PlagiarismService:
         """Create a new plagiarism check record."""
         try:
             # Verify document exists and belongs to user
-            document = self.db.query(UserDocument).filter(
-                UserDocument.id == document_id,
-                UserDocument.user_id == user_id
+            document = self.db.query(PlagiarismDocument).filter(
+                PlagiarismDocument.id == document_id,
+                PlagiarismDocument.user_id == user_id
             ).first()
             
             if not document:
@@ -75,7 +75,7 @@ class PlagiarismService:
             # Create plagiarism check record
             check = PlagiarismCheck(
                 user_id=user_id,
-                user_document_id=document_id,
+                plagiarism_document_id=document_id,
                 total_similarity_score=0.0,
                 check_status=check_status,
                 reference_documents_count=0,
@@ -234,18 +234,24 @@ class PlagiarismService:
     
     def get_document_plagiarism_checks(self, document_id: int) -> list:
         """Get all plagiarism checks for a document."""
-        return self.db.query(PlagiarismCheck).filter(
-            PlagiarismCheck.user_document_id == document_id
+        # Get checks by plagiarism_document_id
+        checks = self.db.query(PlagiarismCheck).filter(
+            PlagiarismCheck.plagiarism_document_id == document_id
         ).order_by(PlagiarismCheck.created_at.desc()).all()
+            
+        return checks
     
     def _process_plagiarism_check(self, check: PlagiarismCheck) -> None:
         """Process plagiarism check against reference documents."""
         start_time = time.time()
         
         try:
-            # Get user document content
-            user_doc = check.user_document
-            user_content = self.storage_service.download_file(user_doc.object_id)
+            # Get document content from plagiarism_document
+            doc = check.plagiarism_document
+            if not doc:
+                raise NotFoundException("Plagiarism document not found")
+                
+            user_content = self.storage_service.download_file(doc.object_id)
             user_text = user_content.decode('utf-8', errors='ignore')
             
             # Get all reference documents
@@ -405,6 +411,35 @@ class PlagiarismService:
     def get_user_plagiarism_checks_count(self, user_id: int) -> int:
         """Get count of user's plagiarism checks."""
         return self.db.query(PlagiarismCheck).filter(PlagiarismCheck.user_id == user_id).count()
+        
+    def initiate_external_plagiarism_check(self, document_id: int, user_id: int) -> PlagiarismCheck:
+        """Initiate a plagiarism check using an external API.
+        
+        This method creates a plagiarism check record and initiates the check process
+        with an external API (to be implemented later).
+        
+        Args:
+            document_id: ID of the document to check
+            user_id: ID of the user initiating the check
+            
+        Returns:
+            The created plagiarism check record
+        """
+        try:
+            # Create plagiarism check record with processing status
+            check = self.create_plagiarism_check(
+                user_id=user_id,
+                document_id=document_id,
+                check_status="processing"
+            )
+            
+           
+            
+            return check
+            
+        except Exception as e:
+            logger.error("Failed to initiate external plagiarism check", error=str(e))
+            raise
     
     def get_plagiarism_check_details(self, check_id: int, user_id: Optional[int] = None) -> Dict[str, Any]:
         """Get detailed plagiarism check results."""
@@ -452,8 +487,8 @@ class PlagiarismService:
                 'created_at': check.created_at
             },
             'document': {
-                'id': check.user_document.id,
-                'title': check.user_document.title
+                'id': check.plagiarism_document.id,
+                'title': check.plagiarism_document.title
             },
             'matches': detailed_matches
         }
