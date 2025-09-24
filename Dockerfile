@@ -19,6 +19,21 @@ COPY . .
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
+# Set a default DATABASE_URL if not provided
+ENV DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/plagiarism_detector}
 
-# Run migrations and start the application
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+# Create a startup script with better error handling
+RUN echo '#!/bin/bash\n\
+echo "Starting application..."\n\
+echo "Environment variables:"\n\
+echo "DATABASE_URL: $DATABASE_URL"\n\
+echo "MINIO_ENDPOINT: $MINIO_ENDPOINT"\n\
+echo "PORT: $PORT"\n\
+echo "RAILWAY_ENVIRONMENT_NAME: $RAILWAY_ENVIRONMENT_NAME"\n\
+echo "Running database migrations..."\n\
+alembic upgrade head || { echo "Migration failed"; exit 1; }\n\
+echo "Starting web server..."\n\
+uvicorn app.main:app --host 0.0.0.0 --port $PORT' > /app/start.sh && chmod +x /app/start.sh
+
+# Run the startup script
+CMD ["/app/start.sh"]
