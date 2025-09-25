@@ -53,19 +53,6 @@ class StorageService:
         # Check if we're in local environment first
         is_local = getattr(settings, 'is_local_environment', False)
         
-        # Log all MinIO configuration for debugging
-        logger.info(
-            "MinIO configuration check",
-            endpoint=settings.minio_endpoint,
-            access_key_available=bool(settings.minio_access_key),
-            secret_key_available=bool(settings.minio_secret_key),
-            bucket=settings.minio_bucket_name,
-            secure=settings.minio_secure,
-            is_local=is_local,
-            railway_env=os.getenv("RAILWAY_ENVIRONMENT_NAME"),
-            railway_project=os.getenv("RAILWAY_PROJECT_ID")
-        )
-        
         # Don't skip if we're in local environment and have localhost endpoint
         if is_local and settings.minio_endpoint in ["localhost:9000", "localhost:9090"]:
             logger.info("Local environment with localhost MinIO - will attempt connection")

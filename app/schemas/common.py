@@ -42,8 +42,6 @@ class HealthCheck(BaseModel):
     database: str = "disconnected"
     storage: str = "disconnected"
     status: str = "unhealthy"
-    database_error: Optional[str] = None
-    storage_error: Optional[str] = None
     
     def calculate_status(self) -> str:
         """Calculate overall status based on component statuses."""
