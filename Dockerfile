@@ -25,6 +25,9 @@ ENV PYTHONUNBUFFERED=1
 
 
 # Run migrations and start the application
-# CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-CMD ["bash", "reset_and_start.sh"]
+# Make sure the script is executable
+RUN chmod +x /app/reset_and_start.sh
+
+# Use ENTRYPOINT to ensure the script runs
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["./reset_and_start.sh"]
