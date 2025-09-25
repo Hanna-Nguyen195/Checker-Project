@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import io
+import structlog
 
 from app.config.database import get_db
 from app.core.dependencies import get_current_admin_dependency, get_pagination_params, PaginationParams
@@ -12,14 +13,17 @@ from app.models.user import User
 from app.schemas.document import (
     ReferenceDocumentResponse, 
     DocumentApprovalRequest, 
-    DocumentRejectionRequest
+    DocumentRejectionRequest,
+    PendingReferenceDocumentResponse
 )
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.common import BaseResponse, PaginatedResponse
 from app.utils.validators import validate_file_upload
 from app.utils.helpers import create_response_metadata
+from app.core.exceptions import NotFoundException
 
-router = APIRouter()
+router = APIRouter(tags=["Admin"])
+logger = structlog.get_logger(__name__)
 
 
 @router.get("/stats", response_model=BaseResponse)
@@ -147,7 +151,50 @@ async def unban_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-# Legacy endpoint for pending documents has been removed
+@router.get("/reference-documents/pending", response_model=BaseResponse)
+async def get_pending_reference_documents(
+    skip: int = 0,
+    limit: int = 20,
+    current_admin: User = Depends(get_current_admin_dependency),
+    db: Session = Depends(get_db)
+):
+    """Get pending user documents awaiting approval for reference database."""
+    try:
+        document_service = DocumentService(db)
+        
+        documents = document_service.get_pending_reference_documents(skip=skip, limit=limit)
+        total_count = document_service.get_pending_reference_documents_count()
+        
+        return BaseResponse(
+            success=True,
+            message="Pending documents retrieved successfully",
+            data={
+                "documents": [
+                    {
+                        "document_id": doc.id,
+                        "title": doc.title,
+                        "uploaded_by": doc.user.username,
+                        "uploaded_at": doc.created_at,
+                        "content_type": doc.content_type,
+                        "status": doc.status
+                    }
+                    for doc in documents
+                ],
+                "pagination": {
+                    "total": total_count,
+                    "skip": skip,
+                    "limit": limit,
+                    "has_more": skip + limit < total_count
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error("Failed to get pending documents", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve pending documents"
+        )
 
 
 @router.get("/documents/pending/summary", response_model=BaseResponse)
@@ -165,10 +212,78 @@ async def get_pending_documents_summary(
     )
 
 
-# Legacy endpoint for approving user documents has been removed
+@router.post("/reference-documents/{document_id}/approve", response_model=BaseResponse)
+async def approve_reference_document(
+    document_id: int,
+    comment: Optional[str] = Form(None),
+    current_admin: User = Depends(get_current_admin_dependency),
+    db: Session = Depends(get_db)
+):
+    """Approve user document for inclusion in reference database."""
+    try:
+        document_service = DocumentService(db)
+        
+        approved_document = document_service.approve_pending_reference_document(
+            document_id=document_id,
+            admin_id=current_admin.id,
+            admin_comment=comment
+        )
+        
+        return BaseResponse(
+            success=True,
+            message="Document approved and added to reference database",
+            data={
+                "document_id": approved_document.id,
+                "title": approved_document.title,
+                "status": approved_document.status,
+                "approved_by": current_admin.username,
+                "comment": comment
+            }
+        )
+        
+    except Exception as e:
+        logger.error("Failed to approve document", document_id=document_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to approve document: {str(e)}"
+        )
 
 
-# Legacy endpoint for rejecting user documents has been removed
+@router.post("/reference-documents/{document_id}/reject", response_model=BaseResponse)
+async def reject_reference_document(
+    document_id: int,
+    comment: str = Form(...),
+    current_admin: User = Depends(get_current_admin_dependency),
+    db: Session = Depends(get_db)
+):
+    """Reject user document for reference database."""
+    try:
+        document_service = DocumentService(db)
+        
+        rejected_document = document_service.reject_pending_reference_document(
+            document_id=document_id,
+            admin_id=current_admin.id,
+            admin_comment=comment
+        )
+        
+        return BaseResponse(
+            success=True,
+            message="Document rejected",
+            data={
+                "document_id": rejected_document.id,
+                "title": rejected_document.title,
+                "status": rejected_document.status,
+                "rejected_by": current_admin.username,
+                "comment": comment
+            }
+        )
+        
+    except Exception as e:
+        logger.error("Failed to reject document", document_id=document_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reject document: {str(e)}"
+        )
 
 
 @router.post("/reference-documents", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
@@ -243,10 +358,79 @@ async def delete_reference_document(
     db: Session = Depends(get_db)
 ):
     """Delete a reference document."""
-    document_service = DocumentService(db)
-    
     try:
+        document_service = DocumentService(db)
+        
+        # Check if document exists
+        document = document_service.get_reference_document(document_id)
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Reference document not found"
+            )
+        
+        # Delete the document and related plagiarism matches
         document_service.delete_reference_document(document_id)
-        return BaseResponse(message="Reference document deleted successfully")
+        
+        return BaseResponse(
+            message=f"Reference document {document_id} and all related plagiarism matches deleted successfully"
+        )
+        
+    except NotFoundException as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.error("Failed to delete reference document", document_id=document_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete reference document: {str(e)}"
+        )
+
+
+@router.post("/reference-documents/sync-storage", response_model=BaseResponse)
+async def synchronize_storage(    
+    document_type: str = Query("all", description="Type of documents to synchronize: 'user', 'reference', or 'all'"),
+    force_check: bool = Query(False, description="Force check all documents even if they were previously marked as missing"),
+    current_admin: User = Depends(get_current_admin_dependency),
+    db: Session = Depends(get_db)
+):
+    """Synchronize MinIO storage with PostgreSQL database records.
+    
+    This endpoint checks if files in the database exist in MinIO storage.
+    If files are missing in MinIO but exist in the database, it marks them as unavailable.
+    """
+    try:
+        document_service = DocumentService(db)
+        
+        logger.info(f"Starting manual storage synchronization for {document_type} documents")
+        
+        # Run the synchronization
+        results = document_service.synchronize_storage_with_database(document_type=document_type)
+        
+        if results.get("status") == "failed":
+            logger.error("Storage synchronization failed", error=results.get("error"))
+            return BaseResponse(
+                success=False,
+                message=f"Storage synchronization failed: {results.get('error', 'Unknown error')}",
+                data=results
+            )
+        
+        # Prepare a more detailed message
+        message = f"Storage synchronization completed: {results.get('checked', 0)} documents checked"
+        if results.get('missing_in_storage', 0) > 0:
+            message += f", {results.get('missing_in_storage', 0)} documents missing in storage"
+        
+        return BaseResponse(
+            success=True,
+            message=message,
+            data=results
+        )
+        
+    except Exception as e:
+        logger.error("Failed to synchronize storage", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to synchronize storage: {str(e)}"
+        )

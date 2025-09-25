@@ -7,18 +7,43 @@ import structlog
 from app.config.database import get_db
 from app.core.dependencies import get_current_user_dependency
 from app.models.user import User
+from app.models.plagiarism import PlagiarismCheck
 from app.services.document_service import DocumentService
 from app.services.plagiarism_service import PlagiarismService
 from app.schemas.common import BaseResponse
-from app.schemas.plagiarism import PlagiarismCheckResponse, ExternalApiResult
+from app.schemas.plagiarism import PlagiarismCheckResponse, ExternalApiResult, PlagiarismCheckDetailResponse
 from app.schemas.document import PlagiarismDocumentResponse
 from app.utils.validators import validate_file_upload
 
-router = APIRouter( tags=["Plagiarism"])
+router = APIRouter(tags=["Plagiarism"])
 logger = structlog.get_logger(__name__)
 
 # Configuration for external plagiarism API
 EXTERNAL_PLAGIARISM_API_URL = "http://your-external-api.com/check-plagiarism"
+
+
+@router.get("/check/{check_id}", response_model=PlagiarismCheckDetailResponse)
+async def get_check_details(
+    check_id: int,
+    current_user: User = Depends(get_current_user_dependency),
+    db: Session = Depends(get_db)
+):
+    """Get detailed results of a plagiarism check by its ID."""
+    try:
+        plagiarism_service = PlagiarismService(db)
+        # Pass user_id to ensure the user can only access their own checks
+        check_details = plagiarism_service.get_plagiarism_check_details(check_id, current_user.id)
+        
+        return check_details
+    except Exception as e:
+        logger.error("Failed to get check details", check_id=check_id, error=str(e))
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve check details: {str(e)}"
+        )
+
 
 
 @router.post("/upload-and-check", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
