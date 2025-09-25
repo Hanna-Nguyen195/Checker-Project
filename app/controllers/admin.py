@@ -286,48 +286,29 @@ async def reject_reference_document(
         )
 
 
-@router.post("/reference-documents", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
-async def create_reference_document(
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    current_admin: User = Depends(get_current_admin_dependency),
-    db: Session = Depends(get_db)
-):
-    """Create a reference document directly."""
-    validate_file_upload(file)
-    
-    document_service = DocumentService(db)
-    
-    try:
-        file_content = await file.read()
-        file_stream = io.BytesIO(file_content)
-        
-        document = document_service.create_reference_document(
-            admin_id=current_admin.id,
-            file_data=file_stream,
-            filename=file.filename,
-            content_type=file.content_type,
-            file_size=len(file_content),
-            title=title
-        )
-        
-        return BaseResponse(
-            message="Reference document created successfully",
-            data=ReferenceDocumentResponse.from_orm(document)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+# Removed redundant create reference document endpoint - using the one in reference_documents.py instead
+# which already handles both admin and regular users
 
-
-@router.get("/reference-documents", response_model=PaginatedResponse)
+@router.get("/reference-documents", response_model=BaseResponse)
 async def get_reference_documents(
     pagination: PaginationParams = Depends(get_pagination_params),
+    sync_storage: bool = Query(True, description="Whether to synchronize with MinIO storage"),
     current_admin: User = Depends(get_current_admin_dependency),
     db: Session = Depends(get_db)
 ):
-    """Get reference documents."""
+    """Get reference documents with optional storage synchronization."""
     try:
         document_service = DocumentService(db)
+        
+        # Optionally synchronize with storage
+        sync_results = None
+        if sync_storage:
+            logger.info("Starting storage synchronization for reference documents")
+            sync_results = document_service.synchronize_storage_with_database(document_type="reference")
+            logger.info("Storage synchronization completed", 
+                      checked=sync_results.get("checked", 0),
+                      missing=sync_results.get("missing_in_storage", 0),
+                      updated=sync_results.get("updated_records", 0))
         
         documents = document_service.get_reference_documents(
             skip=pagination.offset,
@@ -335,13 +316,45 @@ async def get_reference_documents(
         )
         total_count = document_service.get_reference_documents_count()
         
-        document_responses = [ReferenceDocumentResponse.from_orm(doc) for doc in documents]
-        metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
+        response_data = {
+            "documents": [
+                {
+                    "document_id": doc.id,
+                    "title": doc.title,
+                    "created_by": doc.created_by_user.username if doc.created_by_user else "System",
+                    "created_at": doc.created_at,
+                    "content_type": doc.content_type,
+                    "storage_status": doc.document_metadata.get("storage_status", "unknown") if doc.document_metadata else "unknown"
+                }
+                for doc in documents
+            ],
+            "pagination": {
+                "total": total_count,
+                "skip": pagination.offset,
+                "limit": pagination.size,
+                "has_more": pagination.offset + pagination.size < total_count
+            }
+        }
         
-        return PaginatedResponse(
-            message="Reference documents retrieved successfully",
-            data=document_responses,
-            pagination=metadata.pagination
+        # Include sync results if available
+        if sync_results:
+            response_data["sync_results"] = sync_results
+            
+            # Add missing documents information if any
+            if sync_results.get("missing_in_storage", 0) > 0 and "missing_documents" in sync_results:
+                response_data["missing_documents"] = sync_results["missing_documents"]
+        
+        # Create a more informative message
+        message = "Reference documents retrieved successfully"
+        if sync_results:
+            message += f" with storage synchronization ({sync_results.get('checked', 0)} checked)"
+            if sync_results.get('missing_in_storage', 0) > 0:
+                message += f", {sync_results.get('missing_in_storage', 0)} files missing in storage"
+        
+        return BaseResponse(
+            success=True,
+            message=message,
+            data=response_data
         )
     except Exception as e:
         logger.error(f"Error getting reference documents: {str(e)}")
