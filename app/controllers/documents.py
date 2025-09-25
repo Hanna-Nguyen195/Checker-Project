@@ -1,131 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
 import io
 import structlog
 from urllib.parse import quote
 
 from app.config.database import get_db
-from app.core.dependencies import get_current_user_dependency, get_pagination_params, PaginationParams
-from app.core.exceptions import NotFoundException, StorageException, ValidationException, FileUploadException
+from app.core.dependencies import get_current_user_dependency
+from app.core.exceptions import NotFoundException, StorageException
 from app.services.document_service import DocumentService
 from app.models.user import User
 from app.schemas.document import PlagiarismDocumentResponse
-from app.schemas.common import BaseResponse, PaginatedResponse
-from app.utils.validators import validate_file_upload
-from app.utils.helpers import create_response_metadata
+from app.schemas.common import BaseResponse
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-@router.post("/upload", response_model=BaseResponse, status_code=status.HTTP_201_CREATED)
-async def upload_document(
-    file: UploadFile = File(...),
-    title: Optional[str] = Form(None),
-    current_user: User = Depends(get_current_user_dependency),
-    db: Session = Depends(get_db)
-):
-    """Upload a document for plagiarism checking."""
-    try:
-        # Validate file first (before any database operations)
-        validate_file_upload(file)
-        
-        # Read file content
-        file_content = await file.read()
-        file_stream = io.BytesIO(file_content)
-        
-        # Create document service
-        document_service = DocumentService(db)
-        
-        document = document_service.upload_plagiarism_document(
-            user_id=current_user.id,
-            file_data=file_stream,
-            filename=file.filename,
-            content_type=file.content_type,
-            file_size=len(file_content),
-            title=title
-        )
-        
-        return BaseResponse(
-            message="Document uploaded successfully",
-            data=PlagiarismDocumentResponse.from_orm(document)
-        )
-    except FileUploadException as e:
-        logger.warning("File upload validation failed", error=str(e), filename=file.filename)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ValidationException as e:
-        logger.warning("File validation failed", error=str(e), filename=file.filename)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except StorageException as e:
-        logger.error("Storage service error", error=str(e), filename=file.filename)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Storage service unavailable: {str(e)}")
-    except Exception as e:
-        logger.error("Unexpected error in upload_document", error=str(e), filename=file.filename, user_id=current_user.id)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
+# Removed POST /documents/upload endpoint - using /plagiarism/upload-and-check instead
 
-
-@router.get("", response_model=PaginatedResponse)
-async def get_user_documents(
-    sync_storage: bool = Query(False, description="Whether to synchronize with MinIO storage"),
-    pagination: PaginationParams = Depends(get_pagination_params),
-    current_user: User = Depends(get_current_user_dependency),
-    db: Session = Depends(get_db)
-):
-    """Get user's documents with pagination."""
-    document_service = DocumentService(db)
-    
-    # Optionally synchronize with storage
-    sync_results = None
-    if sync_storage:
-        try:
-            sync_results = document_service.synchronize_storage_with_database(document_type="all")
-            logger.info("Storage synchronization performed", 
-                       results=sync_results, user_id=current_user.id)
-        except Exception as e:
-            logger.error("Failed to synchronize storage", error=str(e))
-    
-    documents = document_service.get_plagiarism_documents(
-        user_id=current_user.id,
-        skip=pagination.offset,
-        limit=pagination.size
-    )
-    
-    total_count = document_service.get_plagiarism_documents_count(
-        user_id=current_user.id
-    )
-    
-    # Convert documents to response models
-    document_responses = [PlagiarismDocumentResponse.from_orm(doc) for doc in documents]
-    
-    # Add sync results to metadata if available
-    metadata = create_response_metadata(pagination.page, pagination.size, total_count, len(documents))
-    if sync_results:
-        metadata["sync_results"] = sync_results
-    
-    return PaginatedResponse(
-        data=document_responses,
-        pagination=metadata["pagination"],
-        sync_results=sync_results
-    )
-
+# Removed GET /documents endpoint - using /plagiarism/history instead
 
 @router.get("/{document_id}", response_model=BaseResponse)
 async def get_document(
