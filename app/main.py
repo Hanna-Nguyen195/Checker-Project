@@ -121,12 +121,41 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Health check endpoint
 @app.get("/health", response_model=HealthCheck, tags=["Health"])
 async def health_check():
-    """Health check endpoint."""
-    return HealthCheck(
+    """Health check endpoint that verifies database and storage connections."""
+    # Check database connection
+    database_status = "disconnected"
+    try:
+        from app.config.database import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        database_status = "connected"
+    except Exception as e:
+        logger.error("Health check: Database connection failed", error=str(e))
+        database_status = "disconnected"
+    
+    # Check storage connection
+    storage_status = "disconnected"
+    try:
+        from app.services.storage_service import StorageService
+        storage_service = StorageService()
+        if storage_service.is_connected:
+            storage_status = "connected"
+        else:
+            logger.warning("Health check: Storage service not connected")
+    except Exception as e:
+        logger.error("Health check: Storage service check failed", error=str(e))
+    
+    health_check_response = HealthCheck(
         version=settings.app_version,
-        database="connected",
-        storage="connected"
+        database=database_status,
+        storage=storage_status
     )
+    
+    # Calculate and set the status
+    health_check_response.status = health_check_response.calculate_status()
+    
+    return health_check_response
 
 
 # Root endpoint

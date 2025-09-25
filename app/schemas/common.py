@@ -37,8 +37,17 @@ class ErrorResponse(BaseModel):
 
 class HealthCheck(BaseModel):
     """Health check response."""
-    status: str = "healthy"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     version: str
-    database: str = "connected"
-    storage: str = "connected"
+    database: str = "disconnected"
+    storage: str = "disconnected"
+    status: str = "unhealthy"
+    
+    def calculate_status(self) -> str:
+        """Calculate overall status based on component statuses."""
+        if self.database == "connected" and self.storage == "connected":
+            return "healthy"
+        elif self.database == "connected" or self.storage == "connected":
+            return "degraded"
+        else:
+            return "unhealthy"
